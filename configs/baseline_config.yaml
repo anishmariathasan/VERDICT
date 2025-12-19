@@ -1,0 +1,213 @@
+# VERDICT - Baseline Methods Configuration
+# Configuration for baseline hallucination mitigation methods
+
+# Inherit from base configuration
+_base_: "base_config.yaml"
+
+# ============================================
+# Baseline Methods Overview
+# ============================================
+# Implements the following baseline methods:
+# 1. UAC - Unified Attention Calibration
+# 2. DAC - Dense Attention Calibration
+# 3. VEP - Visual Evidence Prompting
+# 4. OPERA - Over-Trust Penalty and Retrospective Allocation
+
+baselines:
+  # Select which baselines to run
+  enabled_methods:
+    - "uac"
+    - "dac"
+    - "vep"
+    - "opera"
+
+# ============================================
+# Unified Attention Calibration (UAC)
+# ============================================
+uac:
+  enabled: true
+  description: "Calibrates attention to balance vision and language modalities"
+  
+  # Calibration parameters
+  calibration:
+    # Attention scaling
+    vision_scale: 1.5
+    language_scale: 1.0
+    
+    # Layer-wise calibration
+    apply_to_layers: "all"  # Or list of layer indices
+    calibration_method: "multiplicative"
+    
+    # Temperature scaling
+    use_temperature: true
+    temperature: 1.0
+  
+  # Training settings (if fine-tuning calibration)
+  training:
+    calibrate_on_train: true
+    num_calibration_samples: 1000
+    learning_rate: 1.0e-4
+    num_epochs: 5
+
+# ============================================
+# Dense Attention Calibration (DAC)
+# ============================================
+dac:
+  enabled: true
+  description: "Dense pixel-level attention calibration for fine-grained grounding"
+  
+  # Dense attention settings
+  dense_attention:
+    # Resolution for dense attention
+    resolution: [14, 14]  # Patch grid size
+    
+    # Calibration targets
+    target_type: "uniform"  # Options: "uniform", "anatomical", "learned"
+    
+    # Regularisation
+    entropy_weight: 0.1
+    sparsity_weight: 0.05
+  
+  # Anatomical guidance (if target_type is "anatomical")
+  anatomical_guidance:
+    use_segmentation: false
+    segmentation_model: null
+    region_weights:
+      lung: 1.0
+      heart: 0.8
+      mediastinum: 0.7
+      other: 0.5
+
+# ============================================
+# Visual Evidence Prompting (VEP)
+# ============================================
+vep:
+  enabled: true
+  description: "Prompts model to cite visual evidence for generated statements"
+  
+  # Prompting strategy
+  prompting:
+    # Prompt template
+    template: |
+      <image>
+      Generate a radiology report for this chest X-ray.
+      For each finding, describe the visual evidence that supports it.
+      Format: [Finding]: [Description]. Evidence: [Visual evidence location and appearance].
+    
+    # Evidence requirements
+    require_evidence: true
+    evidence_format: "inline"  # Options: "inline", "separate", "structured"
+    
+    # Evidence types
+    evidence_types:
+      - "location"
+      - "appearance"
+      - "comparison"
+  
+  # Evidence validation
+  validation:
+    # Check evidence alignment with attention
+    validate_with_attention: true
+    attention_threshold: 0.1
+    
+    # Structured evidence extraction
+    extract_evidence: true
+    evidence_extractor: "rule_based"
+
+# ============================================
+# OPERA - Over-Trust Penalty and Retrospective Allocation
+# ============================================
+opera:
+  enabled: true
+  description: "Penalises over-reliance on language priors and reallocates attention"
+  
+  # Over-trust detection
+  over_trust:
+    # Detection method
+    method: "attention_entropy"
+    
+    # Thresholds
+    vision_attention_threshold: 0.2
+    entropy_threshold: 2.0
+    
+    # Detection layers
+    monitor_layers: [-4, -3, -2, -1]
+  
+  # Penalty mechanism
+  penalty:
+    # Penalty type
+    type: "multiplicative"
+    
+    # Penalty strength
+    strength: 0.5
+    
+    # Decoding modification
+    apply_during_decoding: true
+    apply_to_logits: true
+  
+  # Retrospective allocation
+  retrospective:
+    # Re-allocation strategy
+    enabled: true
+    method: "attention_reweighting"
+    
+    # Allocation parameters
+    vision_boost: 1.5
+    language_dampen: 0.8
+    
+    # Apply at which steps
+    apply_frequency: "every_token"  # Options: "every_token", "every_n_tokens", "end"
+
+# ============================================
+# Baseline Comparison Settings
+# ============================================
+comparison:
+  # Run all baselines on same samples
+  use_same_samples: true
+  num_comparison_samples: 500
+  
+  # Metrics for comparison
+  metrics:
+    - "chexpert_accuracy"
+    - "hallucination_rate"
+    - "chair_score"
+    - "pope_accuracy"
+    - "generation_length"
+    - "inference_time"
+  
+  # Statistical testing
+  statistical_tests:
+    - "paired_t_test"
+    - "wilcoxon"
+    - "bootstrap_ci"
+  
+  # Visualisation
+  plot_comparison: true
+  comparison_plots:
+    - "bar_chart"
+    - "radar_chart"
+    - "error_analysis"
+
+# ============================================
+# Ablation Studies
+# ============================================
+ablation:
+  # Component ablations
+  components:
+    - name: "no_vision_scale"
+      config:
+        uac.calibration.vision_scale: 1.0
+    
+    - name: "no_temperature"
+      config:
+        uac.calibration.use_temperature: false
+    
+    - name: "no_penalty"
+      config:
+        opera.penalty.strength: 0.0
+  
+  # Hyperparameter sweeps
+  hyperparameter_sweep:
+    uac_vision_scale: [1.0, 1.25, 1.5, 1.75, 2.0]
+    opera_penalty_strength: [0.1, 0.3, 0.5, 0.7, 0.9]
+    dac_entropy_weight: [0.01, 0.05, 0.1, 0.2]

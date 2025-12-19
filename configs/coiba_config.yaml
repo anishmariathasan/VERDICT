@@ -1,0 +1,191 @@
+# VERDICT - CoIBA Configuration
+# Configuration for Contextual Interpretability for Biological Applications (CoIBA) adaptation
+
+# Inherit from base configuration
+_base_: "base_config.yaml"
+
+# ============================================
+# CoIBA Method Configuration
+# ============================================
+coiba:
+  # Core CoIBA settings
+  enabled: true
+  version: "adapted"  # Options: "original", "adapted" (for LVLMs)
+  
+  # Context modelling
+  context:
+    # Contextual information to incorporate
+    use_anatomical_context: true
+    use_clinical_context: true
+    use_report_context: true
+    
+    # Anatomical regions for chest X-rays
+    anatomical_regions:
+      - "right_lung"
+      - "left_lung"
+      - "heart"
+      - "mediastinum"
+      - "diaphragm"
+      - "costophrenic_angles"
+      - "spine"
+      - "ribs"
+      - "clavicles"
+      - "trachea"
+    
+    # Clinical findings to track
+    clinical_findings:
+      - "cardiomegaly"
+      - "pleural_effusion"
+      - "pneumonia"
+      - "atelectasis"
+      - "pneumothorax"
+      - "pulmonary_edema"
+      - "consolidation"
+      - "nodule"
+      - "mass"
+      - "fracture"
+      - "support_devices"
+  
+  # Attribution computation
+  attribution:
+    # Base attribution method
+    base_method: "integrated_gradients"
+    
+    # Contextual weighting
+    context_weight: 0.3
+    local_weight: 0.7
+    
+    # Multi-scale analysis
+    use_multiscale: true
+    scales: [1.0, 0.75, 0.5]
+    aggregate_scales: "weighted_mean"
+    
+    # Perturbation settings
+    perturbation:
+      method: "occlusion"  # Options: "occlusion", "blur", "noise"
+      patch_size: 32
+      stride: 16
+      baseline: "blur"
+    
+    # Gradient settings
+    gradient:
+      num_steps: 100
+      method: "riemann_trapezoid"
+      internal_batch_size: 4
+  
+  # Biological/Medical constraints
+  constraints:
+    # Anatomical consistency
+    enforce_anatomical_consistency: true
+    anatomical_prior_weight: 0.2
+    
+    # Spatial coherence
+    use_spatial_coherence: true
+    coherence_kernel_size: 5
+    
+    # Attention guidance
+    use_attention_guidance: true
+    attention_temperature: 1.0
+
+# ============================================
+# CoIBA for Vision-Language Attribution
+# ============================================
+coiba_vlm:
+  # Cross-modal attribution
+  cross_modal:
+    enabled: true
+    
+    # Vision-to-language attribution
+    vision_to_language:
+      compute: true
+      method: "attention_flow"
+      layers: "all"
+    
+    # Language-to-vision attribution
+    language_to_vision:
+      compute: true
+      method: "gradient_attention"
+      target_tokens: "all"  # Or list of specific tokens
+    
+    # Fusion method
+    fusion:
+      method: "multiplicative"  # Options: "additive", "multiplicative", "attention"
+      normalise: true
+  
+  # Token-level analysis
+  token_analysis:
+    # Track attribution for specific token types
+    track_medical_entities: true
+    track_anatomical_terms: true
+    track_negation: true
+    track_uncertainty: true
+    
+    # Entity detection
+    entity_detection:
+      method: "rule_based"  # Options: "rule_based", "ner", "scispacy"
+      medical_vocabulary: "radlex"
+  
+  # Hallucination detection
+  hallucination:
+    # Attribution-based detection
+    vision_threshold: 0.1  # Minimum vision attribution for grounded tokens
+    confidence_threshold: 0.5
+    
+    # Analysis settings
+    analyse_by_finding: true
+    analyse_by_region: true
+
+# ============================================
+# Evaluation for CoIBA
+# ============================================
+evaluation:
+  coiba_specific:
+    # Attribution quality metrics
+    metrics:
+      - "faithfulness"
+      - "plausibility"
+      - "localisation_accuracy"
+      - "anatomical_consistency"
+    
+    # Faithfulness evaluation
+    faithfulness:
+      method: "deletion"
+      num_steps: 10
+      
+    # Localisation evaluation (using bounding boxes if available)
+    localisation:
+      use_bbox_annotations: true
+      iou_threshold: 0.5
+      
+    # Human evaluation settings
+    human_evaluation:
+      enabled: false
+      num_samples: 100
+      num_annotators: 3
+
+# ============================================
+# Visualisation Settings
+# ============================================
+visualisation:
+  coiba:
+    # Attribution map visualisation
+    show_anatomical_overlay: true
+    show_attention_heads: true
+    show_token_attribution: true
+    
+    # Colour mapping
+    colormap: "RdBu_r"  # Red-Blue diverging for positive/negative
+    alpha: 0.6
+    
+    # Multi-panel plots
+    show_comparison: true
+    comparison_methods:
+      - "coiba"
+      - "attention"
+      - "grad_cam"
+      - "integrated_gradients"
+    
+    # Export settings
+    export_format: "png"
+    dpi: 300
+    figure_size: [12, 8]

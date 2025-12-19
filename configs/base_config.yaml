@@ -1,0 +1,195 @@
+# VERDICT - Base Configuration
+# Vision & language Error Reasoning, Diagnosis, and Classification with Technical improvements
+# Base configuration file - override specific settings in model/experiment configs
+
+# ============================================
+# Project Settings
+# ============================================
+project:
+  name: "verdict"
+  description: "Attribution methods for medical vision-language models"
+  version: "0.1.0"
+  seed: 42
+  device: "cuda"  # Options: "cuda", "cpu", "mps"
+  mixed_precision: true
+  deterministic: true
+
+# ============================================
+# Data Configuration
+# ============================================
+data:
+  dataset: "mimic-cxr"
+  data_dir: "${MIMIC_CXR_DIR}"
+  reports_dir: "${MIMIC_CXR_REPORTS_DIR}"
+  
+  # Image settings
+  image_size: [518, 518]  # MAIRA-2 default
+  image_format: "RGB"
+  normalise: true
+  mean: [0.485, 0.456, 0.406]  # ImageNet normalisation
+  std: [0.229, 0.224, 0.225]
+  
+  # Data splits
+  train_split: "train"
+  val_split: "validate"
+  test_split: "test"
+  
+  # Data loading
+  batch_size: 8
+  num_workers: 4
+  pin_memory: true
+  prefetch_factor: 2
+  
+  # Subset for debugging (set to null for full dataset)
+  debug_subset: null
+
+# ============================================
+# Model Configuration
+# ============================================
+model:
+  name: "maira-2"
+  checkpoint: "microsoft/maira-2"
+  
+  # Model loading options
+  load_in_8bit: false
+  load_in_4bit: false
+  use_flash_attention: true
+  trust_remote_code: true
+  
+  # Generation settings
+  max_new_tokens: 512
+  num_beams: 4
+  temperature: 1.0
+  top_p: 1.0
+  do_sample: false
+  
+  # Vision encoder
+  vision_encoder:
+    freeze: true
+    layer_extraction: [-4, -3, -2, -1]  # Layers for attribution
+  
+  # Language model
+  language_model:
+    freeze: false
+
+# ============================================
+# Training Configuration
+# ============================================
+training:
+  max_epochs: 10
+  max_steps: null  # Set to override epochs
+  
+  # Optimisation
+  optimiser: "adamw"
+  learning_rate: 3.0e-6
+  weight_decay: 0.01
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+  
+  # Learning rate schedule
+  scheduler: "cosine"
+  warmup_steps: 1000
+  warmup_ratio: 0.1
+  min_lr_ratio: 0.1
+  
+  # Gradient handling
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  
+  # Mixed precision
+  mixed_precision: "fp16"  # Options: "no", "fp16", "bf16"
+  
+  # Checkpointing
+  save_steps: 1000
+  save_total_limit: 3
+  save_best_only: true
+  
+  # Early stopping
+  early_stopping: true
+  early_stopping_patience: 3
+  early_stopping_metric: "val_loss"
+  early_stopping_mode: "min"
+
+# ============================================
+# Evaluation Configuration
+# ============================================
+evaluation:
+  # Metrics to compute
+  metrics:
+    - "chexpert"      # CheXpert labeller accuracy
+    - "radfact"       # RadFact factual accuracy
+    - "chair"         # Caption Hallucination Assessment
+    - "pope"          # Polling-based Object Probing Evaluation
+    - "bleu"          # BLEU score
+    - "rouge"         # ROUGE scores
+  
+  # Evaluation settings
+  eval_batch_size: 16
+  save_predictions: true
+  save_attributions: true
+  
+  # POPE evaluation settings
+  pope:
+    num_questions: 500
+    question_types: ["random", "popular", "adversarial"]
+
+# ============================================
+# Attribution Configuration
+# ============================================
+attribution:
+  # Methods to compute
+  methods:
+    - "coiba"
+    - "integrated_gradients"
+    - "attention"
+    - "grad_cam"
+  
+  # Attribution settings
+  baseline_type: "zero"  # Options: "zero", "blur", "noise"
+  num_steps: 50  # For integrated gradients
+  internal_batch_size: 8
+  
+  # Layer selection
+  vision_layers: "all"  # Or list of layer indices
+  language_layers: "all"
+  
+  # Visualisation
+  visualise: true
+  overlay_alpha: 0.6
+  colormap: "jet"
+  save_format: "png"
+
+# ============================================
+# Logging Configuration
+# ============================================
+logging:
+  # Weights & Biases
+  use_wandb: true
+  wandb_project: "verdict"
+  wandb_entity: "${WANDB_ENTITY}"
+  wandb_run_name: null  # Auto-generated if null
+  wandb_tags: []
+  
+  # Console logging
+  log_level: "INFO"
+  log_interval: 10
+  
+  # File logging
+  save_logs: true
+  log_dir: "${OUTPUT_DIR}/logs"
+
+# ============================================
+# Output Configuration
+# ============================================
+output:
+  base_dir: "${OUTPUT_DIR}"
+  checkpoints_dir: "${OUTPUT_DIR}/checkpoints"
+  attributions_dir: "${OUTPUT_DIR}/attributions"
+  results_dir: "${OUTPUT_DIR}/results"
+  logs_dir: "${OUTPUT_DIR}/logs"
+  
+  # Experiment naming
+  experiment_name: null  # Auto-generated if null
+  timestamp: true
