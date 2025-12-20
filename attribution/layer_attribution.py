@@ -50,7 +50,7 @@ class LayerAttribution:
         Wrapper for model forward pass.
         
         Args:
-            inputs: Image tensor.
+            inputs: Image tensor (pixel_values).
             input_ids: Token IDs.
             attention_mask: Attention mask.
             target_token_idx: Index of token to compute attribution for.
@@ -58,12 +58,14 @@ class LayerAttribution:
         Returns:
             Logits for the target token.
         """
+        # MAIRA-2 uses pixel_values, not images
         outputs = self.model(
-            images=inputs,
+            pixel_values=inputs,
             input_ids=input_ids,
             attention_mask=attention_mask,
         )
         logits = outputs.logits
+        # Get logits for the last generated position
         last_token_logits = logits[:, -1, :]
         return last_token_logits[:, target_token_idx]
 

@@ -836,6 +836,118 @@ class MAIRA2Model(nn.Module):
         
         logger.info("All parameters unfrozen")
     
+    # ========================================================================
+    # CoIBA Integration
+    # ========================================================================
+    
+    def get_vision_layer_names(
+        self,
+        start_layer: int = 4,
+        end_layer: int = 12,
+    ) -> List[str]:
+        """
+        Get layer names for CoIBA attribution.
+        
+        Returns the actual module paths for vision encoder layers
+        that can be used with CoIBA's setup_model() method.
+        
+        Args:
+            start_layer: First layer to include (CoIBA default: 4).
+            end_layer: Last layer to include (exclusive, max 12).
+        
+        Returns:
+            List of layer name paths suitable for CoIBA.
+        
+        Example:
+            >>> model = MAIRA2Model.from_pretrained("microsoft/maira-2")
+            >>> layer_names = model.get_vision_layer_names()
+            >>> coiba = CoIBAForLVLM(target_layers=layer_names)
+            >>> coiba.setup_model(model.get_vision_encoder())
+        """
+        self._check_loaded()
+        
+        # Discover actual layer structure
+        vision_encoder = self._vision_encoder
+        layer_patterns = []
+        
+        # Try common patterns for ViT layers
+        for name, module in vision_encoder.named_modules():
+            # Match patterns like 'blocks.0', 'encoder.layer.0', 'layers.0'
+            parts = name.split('.')
+            if len(parts) >= 2 and parts[-1].isdigit():
+                idx = int(parts[-1])
+                if 0 <= idx < MAIRA2_NUM_VISION_LAYERS:
+                    if idx == 0:  # Found the pattern
+                        prefix = '.'.join(parts[:-1])
+                        layer_patterns = [
+                            f"{prefix}.{i}" for i in range(start_layer, min(end_layer, MAIRA2_NUM_VISION_LAYERS))
+                        ]
+                        break
+        
+        # Fallback patterns if not found dynamically
+        if not layer_patterns:
+            # Try known Rad-DINO / ViT patterns
+            fallback_patterns = [
+                "blocks.{i}",           # timm ViT
+                "encoder.layer.{i}",    # HuggingFace ViT
+                "layers.{i}",           # Generic
+            ]
+            
+            for pattern in fallback_patterns:
+                test_name = pattern.format(i=0)
+                try:
+                    module = vision_encoder
+                    for part in test_name.split('.'):
+                        if part.isdigit():
+                            module = module[int(part)]
+                        else:
+                            module = getattr(module, part)
+                    # Found valid pattern
+                    layer_patterns = [
+                        pattern.format(i=i) for i in range(start_layer, min(end_layer, MAIRA2_NUM_VISION_LAYERS))
+                    ]
+                    break
+                except (AttributeError, IndexError, KeyError):
+                    continue
+        
+        if not layer_patterns:
+            logger.warning(
+                "Could not automatically detect vision layer names. "
+                "Please inspect model structure and provide layer names manually."
+            )
+        else:
+            logger.info(f"Discovered vision layers: {layer_patterns}")
+        
+        return layer_patterns
+    
+    def setup_coiba(
+        self,
+        coiba: "CoIBAForLVLM",  # type: ignore  # noqa: F821
+        start_layer: int = 4,
+        end_layer: int = 12,
+    ) -> List[str]:
+        """
+        Setup CoIBA attribution on this model's vision encoder.
+        
+        Convenience method that discovers layer names and sets up hooks.
+        
+        Args:
+            coiba: CoIBAForLVLM instance to setup.
+            start_layer: First layer for attribution.
+            end_layer: Last layer (exclusive).
+        
+        Returns:
+            List of hooked layer names.
+        
+        Example:
+            >>> model = MAIRA2Model.from_pretrained("microsoft/maira-2")
+            >>> coiba = CoIBAForLVLM(beta=10.0)
+            >>> hooked_layers = model.setup_coiba(coiba)
+            >>> coiba.estimate(model.get_vision_encoder(), dataloader)
+        """
+        layer_names = self.get_vision_layer_names(start_layer, end_layer)
+        return coiba.setup_model(self._vision_encoder, layer_names)
+    
     def _check_loaded(self) -> None:
         """Check that model is loaded."""
         if not self._is_loaded:
