@@ -73,6 +73,3 @@ This project implements:
 - **CoIBA Adapter**: Adapts CoIBA for LVLMs.
 - **Layer-wise Attribution**: Integrated Gradients and GradCAM for intermediate layers.
 - **Token-level Attribution**: Attention-based and gradient-based token importance.
-
-## License
-[License Name]
