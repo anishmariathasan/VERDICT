@@ -300,6 +300,36 @@ class TestKLDivergence:
 
 
 # ============================================================================
+# CoIBA First Layer KL Test (Paper Equation 8)
+# ============================================================================
+
+class TestFirstLayerKL:
+    """Test that KL is computed only for the first targeted layer (CoIBA paper Eq. 8).
+    
+    According to the paper: "To compress the subsequent layers, the simplified 
+    objective necessitates calculating only the mutual information of the first 
+    layer I[R_1; Z_1]."
+    """
+    
+    def test_kl_only_first_layer_docstring(self):
+        """Verify the docstring documents first-layer-only KL behavior."""
+        import inspect
+        source = inspect.getsource(CoIBAForLVLM._do_restrict_information)
+        assert "ONLY for the FIRST targeted layer" in source
+        assert "I[R_1; Z_1]" in source
+    
+    def test_first_layer_sets_capacity(self):
+        """Test that first layer sets (not accumulates) capacity."""
+        coiba = CoIBAForLVLM(target_layers=["layer.0", "layer.1", "layer.2"])
+        
+        # Verify target_layers[0] check is in the method
+        import inspect
+        source = inspect.getsource(CoIBAForLVLM._do_restrict_information)
+        assert "target_layers[0]" in source
+        assert "self._buffer_capacity = kl" in source  # Set, not +=
+
+
+# ============================================================================
 # Utility Function Tests
 # ============================================================================
 

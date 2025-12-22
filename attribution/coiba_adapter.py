@@ -550,6 +550,15 @@ class CoIBAForLVLM(nn.Module):
             - λ = sigmoid(α) is the learned mask
             - ε ~ N(μ, σ²) is noise sampled from estimated distribution
         
+        IMPORTANT: According to CoIBA paper (Equation 8, Section 3.4), the 
+        variational upper bound is optimised by computing mutual information
+        ONLY for the FIRST targeted layer (I[R_1; Z_1]), while applying noise
+        to ALL targeted layers via the shared alpha parameter.
+        
+        Paper quote: "To compress the subsequent layers, the simplified objective 
+        necessitates calculating only the mutual information of the first layer 
+        I[R_1; Z_1]."
+        
         Args:
             x: Input features [B, N, D] where N is num_tokens, D is hidden_dim.
             layer_name: Name of the layer for getting μ and σ.
@@ -576,7 +585,7 @@ class CoIBAForLVLM(nn.Module):
         σ = self.layer_estimator[layer_name].std()[st:]
         σ = torch.clamp(σ, min=self.min_std)
         
-        # Compute lambda (information mask)
+        # Compute lambda (information mask) - shared across all layers
         λ = torch.sigmoid(self.alpha)
         
         # Expand lambda to match batch size
@@ -585,20 +594,18 @@ class CoIBAForLVLM(nn.Module):
         else:
             λ = λ.expand(x.shape[0], -1, -1, -1)
         
-        # Compute KL divergence (information loss)
-        # This measures how much information passes through the bottleneck
-        kl = self._kl_div(x, λ, μ, σ)
-        
-        # Accumulate capacity across layers
-        if self._buffer_capacity is None:
-            self._buffer_capacity = kl
-        else:
-            self._buffer_capacity = self._buffer_capacity + kl
+        # Compute KL divergence ONLY for the FIRST targeted layer
+        # This is the key insight from CoIBA: optimise I[R_1; Z_1] only
+        # while applying noise to all layers via shared alpha
+        if self.target_layers and layer_name == self.target_layers[0]:
+            kl = self._kl_div(x, λ, μ, σ)
+            self._buffer_capacity = kl  # Set (not accumulate) from first layer only
         
         # Sample noise from estimated distribution
         ε = torch.randn_like(x) * σ + μ
         
         # Apply bottleneck: z = λ * x + (1 - λ) * ε
+        # This is applied to ALL layers
         z = λ * x + (1 - λ) * ε
         
         # Reattach CLS token if we skipped it
